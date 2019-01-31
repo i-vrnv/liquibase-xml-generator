@@ -6,9 +6,15 @@ import "github.com/tealeg/xlsx"
 
 const (
 	// Header for liquidbase
-	Header            = `<?xml version="1.1" encoding="UTF-8" standalone="no"?>` + "\n"
-	Xmlns             = `http://www.liquibase.org/xml/ns/dbchangelog`
-	XmlnsXsi          = `http://www.w3.org/2001/XMLSchema-instance`
+	Header = `<?xml version="1.1" encoding="UTF-8" standalone="no"?>` + "\n"
+
+	// Xmlns namespace
+	Xmlns = `http://www.liquibase.org/xml/ns/dbchangelog`
+
+	// XmlnsXsi Xsi namespace
+	XmlnsXsi = `http://www.w3.org/2001/XMLSchema-instance`
+
+	// XsiSchemaLocation schema location
 	XsiSchemaLocation = `http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd`
 )
 
@@ -54,18 +60,22 @@ type Constraints struct {
 }
 
 func main() {
-	dataBaseChangeLog := createDataBaseChangeLog()
-	dataBaseChangeLog.ChangeSet = ChangeSet{
-		Author: "Me",
-		ID:     "New Table",
-		CreateTable: CreateTable{
-			TableName: "new_big_table",
-			Remarks:   "Table for nothing",
-			Column: Column{
-				Name: "code",
-				Type: "varchar",
-				Constraints: Constraints{
-					PrimaryKey: false,
+	dataBaseChangeLog := DatabaseChangeLog{
+		Xmlns:             "http://www.liquibase.org/xml/ns/dbchangelog",
+		XmlnsXsi:          "http://www.w3.org/2001/XMLSchema-instance",
+		XsiSchemaLocation: "http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd",
+		ChangeSet: ChangeSet{
+			Author: "Me",
+			ID:     "New Table",
+			CreateTable: CreateTable{
+				TableName: "new_big_table",
+				Remarks:   "Table for nothing",
+				Column: Column{
+					Name: "code",
+					Type: "varchar",
+					Constraints: Constraints{
+						PrimaryKey: false,
+					},
 				},
 			},
 		},
@@ -77,11 +87,12 @@ func main() {
 	}
 }
 
-func createDataBaseChangeLog() DatabaseChangeLog {
+func createDataBaseChangeLog(changeSet ChangeSet) DatabaseChangeLog {
 	dbcl := DatabaseChangeLog{
 		Xmlns:             Xmlns,
 		XmlnsXsi:          XmlnsXsi,
 		XsiSchemaLocation: XsiSchemaLocation,
+		ChangeSet:         changeSet,
 	}
 	return dbcl
 }
