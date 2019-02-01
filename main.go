@@ -40,7 +40,7 @@ type CreateTable struct {
 	XMLName   xml.Name `xml:"createTable"`
 	TableName string   `xml:"tableName,attr"`
 	Remarks   string   `xml:"remarks,attr"`
-	Column    Column   `xml:"column"`
+	Columns   []Column `xml:"column"`
 }
 
 // Column structure
@@ -60,31 +60,44 @@ type Constraints struct {
 }
 
 func main() {
-	dataBaseChangeLog := DatabaseChangeLog{
-		Xmlns:             "http://www.liquibase.org/xml/ns/dbchangelog",
-		XmlnsXsi:          "http://www.w3.org/2001/XMLSchema-instance",
-		XsiSchemaLocation: "http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd",
-		ChangeSet: ChangeSet{
-			Author: "Me",
-			ID:     "New Table",
-			CreateTable: CreateTable{
-				TableName: "new_big_table",
-				Remarks:   "Table for nothing",
-				Column: Column{
-					Name: "code",
-					Type: "varchar",
-					Constraints: Constraints{
-						PrimaryKey: false,
-					},
-				},
-			},
-		},
+
+	fmt.Printf("Start reading file...\n")
+	excelFileName := "/home/user/Documents/GPB/test.xlsx"
+	xlFile, err := xlsx.OpenFile(excelFileName)
+	if err != nil {
+		fmt.Printf("File reading error\n")
 	}
+
+	var changeSet ChangeSet
+
+	for _, sheet := range xlFile.Sheets {
+		table := CreateTable{
+			TableName: sheet.Name,
+		}
+		for _, row := range sheet.Rows {
+			column := Column{
+				Name: row.Cells[0].String(),
+				Type: row.Cells[1].String(),
+			}
+			table.addColumn(column)
+		}
+		changeSet = ChangeSet{
+			Author:      "Dumby",
+			ID:          "IDDQD",
+			CreateTable: table,
+		}
+	}
+
+	dataBaseChangeLog := createDataBaseChangeLog(changeSet)
 
 	if xmlString, err := xml.MarshalIndent(dataBaseChangeLog, "", "    "); err == nil {
 		xmlString = []byte(Header + string(xmlString))
 		fmt.Printf("%s\n", xmlString)
 	}
+}
+
+func (table *CreateTable) addColumn(column Column) {
+	table.Columns = append(table.Columns, column)
 }
 
 func createDataBaseChangeLog(changeSet ChangeSet) DatabaseChangeLog {
