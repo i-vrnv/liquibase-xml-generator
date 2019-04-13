@@ -1,103 +1,67 @@
 package main
 
-import "fmt"
-import "encoding/xml"
-import "github.com/tealeg/xlsx"
+import (
+	"bufio"
+	"encoding/xml"
+	"flag"
+	"fmt"
+	"os"
+	"regexp"
 
-const (
-	// Header for liquidbase
-	Header = `<?xml version="1.1" encoding="UTF-8" standalone="no"?>` + "\n"
-
-	// Xmlns namespace
-	Xmlns = `http://www.liquibase.org/xml/ns/dbchangelog`
-
-	// XmlnsXsi Xsi namespace
-	XmlnsXsi = `http://www.w3.org/2001/XMLSchema-instance`
-
-	// XsiSchemaLocation schema location
-	XsiSchemaLocation = `http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.5.xsd`
+	"github.com/tealeg/xlsx"
 )
 
-// DatabaseChangeLog structure
-type DatabaseChangeLog struct {
-	XMLName           xml.Name  `xml:"databaseChangeLog"`
-	Xmlns             string    `xml:"xmlns,attr"`
-	XmlnsXsi          string    `xml:"xmlns:xsi,attr"`
-	XsiSchemaLocation string    `xml:"xsi:schemaLocation,attr"`
-	ChangeSet         ChangeSet `xml:"changeSet"`
-}
-
-// ChangeSet structure
-type ChangeSet struct {
-	XMLName     xml.Name    `xml:"changeSet"`
-	Author      string      `xml:"author,attr"`
-	ID          string      `xml:"id,attr"`
-	CreateTable CreateTable `xml:"createTable"`
-}
-
-// CreateTable structure
-type CreateTable struct {
-	XMLName   xml.Name `xml:"createTable"`
-	TableName string   `xml:"tableName,attr"`
-	Remarks   string   `xml:"remarks,attr"`
-	Columns   []Column `xml:"column"`
-}
-
-// Column structure
-type Column struct {
-	XMLName     xml.Name    `xml:"column"`
-	Name        string      `xml:"name,attr"`
-	Type        string      `xml:"type,attr"`
-	Remarks     string      `xml:"remarks,attr,omitempty"`
-	Constraints Constraints `xml:"constraints"`
-}
-
-// Constraints structure
-type Constraints struct {
-	XMLName    xml.Name `xml:"constraints"`
-	Nullable   bool     `xml:"nullable,attr"`
-	PrimaryKey bool     `xml:"primaryKey,attr,omitempty"`
-}
+var author = flag.String("author", "liquibase", "Set ChangeSet author name")
+var id = flag.String("id", "1", "Set ChangeSet id")
+var sourceFile = flag.String("source", "", "Select the Excel's file with data")
+var destinationFile = flag.String("destination", fmt.Sprintf("changeset-%s.xml", *id), "Change filename of output XML file")
 
 func main() {
+	flag.Parse()
 
-	fmt.Printf("Start reading file...\n")
-	excelFileName := "/home/user/Documents/GPB/test.xlsx"
-	xlFile, err := xlsx.OpenFile(excelFileName)
+	fmt.Printf("Start reading file %s...\n", *sourceFile)
+	xlsFile, err := xlsx.OpenFile(*sourceFile)
 	if err != nil {
 		fmt.Printf("File reading error\n")
+		os.Exit(1)
 	}
 
-	var changeSet ChangeSet
-
-	for _, sheet := range xlFile.Sheets {
-		table := CreateTable{
-			TableName: sheet.Name,
-		}
-		for _, row := range sheet.Rows {
-			column := Column{
-				Name: row.Cells[0].String(),
-				Type: row.Cells[1].String(),
-			}
-			table.addColumn(column)
-		}
-		changeSet = ChangeSet{
-			Author:      "Dumby",
-			ID:          "IDDQD",
-			CreateTable: table,
-		}
-	}
-
+	changeSet := createChangeSetFromFile(xlsFile)
 	dataBaseChangeLog := createDataBaseChangeLog(changeSet)
+	xml := generateXML(dataBaseChangeLog)
 
-	if xmlString, err := xml.MarshalIndent(dataBaseChangeLog, "", "    "); err == nil {
-		xmlString = []byte(Header + string(xmlString))
-		fmt.Printf("%s\n", xmlString)
-	}
+	writeToFile(*destinationFile, changeCloseTags(xml))
+
 }
 
 func (table *CreateTable) addColumn(column Column) {
 	table.Columns = append(table.Columns, column)
+}
+
+func createChangeSetFromFile(xlsFile *xlsx.File) ChangeSet {
+	var changeSet ChangeSet
+	for _, sheet := range xlsFile.Sheets {
+		table := CreateTable{
+			TableName: sheet.Name,
+		}
+		for _, row := range sheet.Rows[1:] {
+			column := Column{
+				Name:    row.Cells[0].String(),
+				Type:    row.Cells[1].String(),
+				Remarks: row.Cells[3].String(),
+				Constraints: Constraints{
+					Nullable: row.Cells[2].Bool(),
+				},
+			}
+			table.addColumn(column)
+		}
+		changeSet = ChangeSet{
+			Author:      *author,
+			ID:          *id,
+			CreateTable: table,
+		}
+	}
+	return changeSet
 }
 
 func createDataBaseChangeLog(changeSet ChangeSet) DatabaseChangeLog {
@@ -110,20 +74,31 @@ func createDataBaseChangeLog(changeSet ChangeSet) DatabaseChangeLog {
 	return dbcl
 }
 
-func extractData() {
-	fmt.Printf("Start reading file...\n")
-	excelFileName := "/home/user/Documents/GPB/test.xlsx"
-	xlFile, err := xlsx.OpenFile(excelFileName)
+func generateXML(dbChangelog DatabaseChangeLog) string {
+	xmlBytes, err := xml.MarshalIndent(dbChangelog, "", "    ")
 	if err != nil {
-		fmt.Printf("File reading error\n")
+		panic(err)
 	}
-	for _, sheet := range xlFile.Sheets {
-		for i, row := range sheet.Rows {
-			fmt.Printf("Start reading a row %v\n", i)
-			for _, cell := range row.Cells {
-				text := cell.String()
-				fmt.Printf("%s\n", text)
-			}
+	return Header + string(xmlBytes)
+}
+
+func writeToFile(fileName string, xml string) {
+	f, err := os.Create(fileName)
+	if err != nil {
+		panic(err)
+	}
+
+	w := bufio.NewWriter(f)
+	b, err := w.WriteString(xml)
+	if b < len(xml) {
+		if err != nil {
+			panic(err)
 		}
 	}
+	w.Flush()
+}
+
+func changeCloseTags(xml string) string {
+	r := regexp.MustCompile("></[[:alnum:]]*>")
+	return r.ReplaceAllString(xml, "/>")
 }
