@@ -1,0 +1,4 @@
+matrix:
+  include:
+    - language: go
+      go: 1.11.x
